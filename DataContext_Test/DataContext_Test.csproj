@@ -47,6 +47,7 @@
     <Compile Include="SQLParamName.cs" />
     <Compile Include="SQLProcedure.cs" />
     <Compile Include="SQLServerDatamap.cs" />
+    <Compile Include="TSQLProcedure.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
