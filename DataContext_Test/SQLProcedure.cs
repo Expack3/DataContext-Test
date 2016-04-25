@@ -10,9 +10,8 @@ using System.Data.Sql;
 
 namespace DataContext_Test
 {
-    public abstract class SQLProcedure
+    class SQLProcedure
     {
-        protected DataRowCollection source;
         private Dictionary<string, SQLParamName> parameterList;
         public string Name { get; private set; }
         public string Table { get; private set; }
@@ -24,10 +23,8 @@ namespace DataContext_Test
             }
         }
 
-        public SQLProcedure(string name, string table, DataRow[] dt, DataTable source)
+        public SQLProcedure(string name, string table, DataRow[] dt)
         {
-            this.source = source.Rows;
-
             Name = name;
             Table = table;
             parameterList = new Dictionary<string, SQLParamName>();
@@ -37,11 +34,101 @@ namespace DataContext_Test
             }
         }
 
-        public abstract bool RunProcedure();
+        public bool RunProcedure(SqlConnection conn, params object[] parameters)
+        {
+            if (conn.State != ConnectionState.Open)
+                throw new DataException("The given connection is not open.");
 
-        public abstract SQLParamName[] GenerateSQLParams(DataRow[] dt);
+            if(parameters.Length != NumberOfParams)
+            {
+                throw new ArgumentOutOfRangeException(string.Format("The procedure {0} requires {1} parameters.",Name,NumberOfParams));
+            }
+            for(int i = 0; i < parameters.Length; i++)
+            {
+                if(!SQLServerDatamap.GetType(parameters[i].GetType()).Equals(parameterList.Values.ElementAt(i).ParamType))
+                {
+                    throw new ArgumentException(string.Format("Argument {0} is of type {1}; expected type is {2}", i,
+                        parameters[i].GetType(), parameterList.Values.ElementAt(i).ParamType));
+                }
+            }
+            SqlCommand procedure = new SqlCommand(string.Format("EXEC {0}",Name),conn);
+            Parallel.For(0, parameters.Length, (i, loop) =>
+            {
+                var paramCopy = parameterList.Values.ElementAt(i);
+                SqlParameter parameter = new SqlParameter(paramCopy.Name, paramCopy.ParamType);
+                parameter.Scale = (byte)paramCopy.Scale;
+                parameter.Precision = (byte)paramCopy.Precision;
+                parameter.Value = parameters[i];
+                if (paramCopy.Collation != null)
+                    parameter.XmlSchemaCollectionName = paramCopy.Collation;
+                procedure.Parameters.Add(parameter);
+            });
+            try
+            {
+                procedure.ExecuteNonQuery();
+            }
+            catch
+            {
+                throw;
+            }
+            finally
+            {
+                procedure.Dispose();
+            }
+            return true;
+        }
 
-        protected abstract bool IsParamOptional(string paramName);
+        public SQLParamName[] GenerateSQLParams(DataRow[] dt)
+        {
+            SQLParamName[] SQLparameters = new SQLParamName[dt.Length];
+            for (int i = 0; i < dt.Length; i++)
+            {
+                DataRow dr = dt[i];
+                SQLParamName param = new SQLParamName();
+
+                param.Name = (string)dr.ItemArray[2];
+                param.Parent = this;
+                param.ID = (int)dr.ItemArray[3];
+                param.ParamType = GetSqlTypeFromString((string)dr.ItemArray[4]);
+                param.MaximumLength = Convert.ToDouble(dr.ItemArray[5]);
+                param.Precision = (int)dr.ItemArray[6];
+
+                if (dr.ItemArray[7].GetType() == typeof(int))
+                    param.Scale = (int)dr.ItemArray[7];
+                else
+                    param.Scale = -1;
+
+                if(dr.ItemArray[8].GetType() == typeof(DBNull))
+                    param.Collation = null;
+                else
+                    param.Collation = (string)dr.ItemArray[8];
+
+                param.MakeFinal();
+                SQLparameters[i] = param;
+            }
+            return SQLparameters;
+        }
+
+        //this should be an extension method for string
+        private SqlDbType GetSqlTypeFromString (string s)
+        {
+            string[] types = Enum.GetNames(typeof(SqlDbType));
+
+            //convert all enum names to lowercase
+            for(int i = 0; i < types.Length; i++)
+            {
+                types[i] = types[i].ToLower();
+            }
+
+            //make sure s is also lowercase
+            s = s.ToLower();
+            for (int i = 0; i < types.Length; i++)
+            {
+                if (types[i].Equals(s))
+                    return (SqlDbType)i;
+            }
+            throw new ArgumentException(string.Format("{0} is not a valid SQL datatype.", s));
+        }
 
         public SQLParamName[] GetAllParamaters()
         {

@@ -8,7 +8,7 @@ using System.Data;
 
 namespace DataContext_Test
 {
-    public class SQLParamName
+    class SQLParamName
     {
         private string name;
         private SQLProcedure parent;
@@ -19,8 +19,6 @@ namespace DataContext_Test
         private int scale;
         private string collation;
         private bool finalized;
-
-        private bool optional;
 
         public string Name
         {
@@ -126,26 +124,12 @@ namespace DataContext_Test
             }
         }
 
-        public bool Optional
-        {
-            get
-            {
-                return optional;
-            }
-            set
-            {
-                if (!finalized)
-                    optional = value;
-            }
-        }
-
         public SQLParamName()
         {
 
         }
 
-        public SQLParamName(string name, SQLProcedure procedure, int id, SqlDbType paramType, double maxLength, int precision, 
-            int scale, string collation, bool optional)
+        public SQLParamName(string name, SQLProcedure procedure, int id, SqlDbType paramType, double maxLength, int precision, int scale, string collation)
         {
             Name = name;
             Parent = procedure;
@@ -155,17 +139,14 @@ namespace DataContext_Test
             Precision = precision;
             Scale = scale;
             Collation = collation;
-            Optional = optional;
+
+            if (procedure != null)
+                finalized = true;
         }
 
         public void MakeFinal()
         {
             finalized = true;
-        }
-
-        public void RevokeFinal()
-        {
-            finalized = false;
         }
 
         public override bool Equals(object obj)
@@ -194,16 +175,14 @@ namespace DataContext_Test
                 return false;
             if (this.Collation != comp.Collation)
                 return false;
-            if(this.Optional != comp.Optional)
-                return false;
 
             return true;
         }
 
         public override string ToString()
         {
-            return string.Format("Name: {0}\nParent: {1}\nID: {2}\nType: {3}\nMax Length: {4}\nPrecision: {5}\nScale: {6}\nCollation: {7}\nFinalized: {8}\nOptional: {9}",
-                name, parent.Name, id, paramType, maximumLength, precision, scale, collation, finalized,Optional);
+            return string.Format("Name: {0}\nParent: {1}\nID: {2}\nType: {3}\nMax Length: {4}\nPrecision: {5}\nScale: {6}\nCollation: {7}\nFinalized: {8}",
+                name, parent.Name, id, paramType, maximumLength, precision, scale, collation, finalized);
         }
     }
 }

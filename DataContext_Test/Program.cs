@@ -16,8 +16,6 @@ namespace DataContext_Test
     {
         const string tableColumnsQuery = "uspGetAllTablesAndColumns";
         const string tableProcsQuery = "uspGetAllTableProcs";
-        const string procSourceQuery = "sp_helptext";
-
         static void Main(string[] args)
         {
             SqlConnection conn = new SqlConnection("Data Source=WIN-JVHVCOHCL3P;Database=testDatabase;Password=Cup86ego!;UID=sa");
@@ -27,15 +25,15 @@ namespace DataContext_Test
                 conn.Open();
                 Console.WriteLine("Connection successful");
 
-                DataTable tablesAndColumns = null;
+                DataTable tablesAndColumns = GetAllTablesAndColumns(conn);
 
-                string[] tableNames = GetAllTableNames(conn, out tablesAndColumns);
+                string[] tableNames = GetAllTableNames(tablesAndColumns);
 
                 DataTable procedures = GetAllProcedures(tableNames, conn);
 
-                //PrintProcedureResults(tablesAndColumns, procedures);
+                PrintProcedureResults(tablesAndColumns, procedures);
 
-                SQLProcedure[] procObjs = GenerateProcedureObjects(procedures, conn);
+                SQLProcedure[] procObjs = GenerateProcedureObjects(procedures);
                 foreach (SQLProcedure po in procObjs)
                 {
                     Console.WriteLine(po.ToString());
@@ -84,23 +82,11 @@ namespace DataContext_Test
             }
         }
 
-        static string[] GetAllTableNames(SqlConnection conn, out DataTable dt)
+        static string[] GetAllTableNames(DataTable dt)
         {
-            dt = null;
-            try
+            if (dt == null)
             {
-                using (SqlDataAdapter da = new SqlDataAdapter())
-                {
-                    da.SelectCommand = new SqlCommand(tableProcsQuery, conn);
-                    da.SelectCommand.CommandType = System.Data.CommandType.StoredProcedure;
-                    DataSet ds = new DataSet();
-                    da.Fill(ds, "tablesAndColumns_T");
-                    dt = ds.Tables["tablesAndColumns_T"];
-                }
-            }
-            catch (Exception)
-            {
-                throw;
+                throw new ArgumentNullException();
             }
             if (!dt.TableName.Equals("tablesAndColumns_T"))
             {
@@ -113,6 +99,27 @@ namespace DataContext_Test
                     tableNames.Add((string)dr.ItemArray[0]);
             }
             return tableNames.ToArray();
+        }
+
+        static DataTable GetAllTablesAndColumns(SqlConnection conn)
+        {
+            DataTable final = null;
+            try
+            {
+                using (SqlDataAdapter da = new SqlDataAdapter())
+                {
+                    da.SelectCommand = new SqlCommand(tableProcsQuery, conn);
+                    da.SelectCommand.CommandType = System.Data.CommandType.StoredProcedure;
+                    DataSet ds = new DataSet();
+                    da.Fill(ds, "tablesAndColumns_T");
+                    final = ds.Tables["tablesAndColumns_T"];
+                }
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+            return final;
         }
 
         //static SQLProcedure[] GetProcedureObjects(DataTable dt)
@@ -144,7 +151,7 @@ namespace DataContext_Test
             return final;
         }
 
-        static SQLProcedure[] GenerateProcedureObjects(DataTable dt, SqlConnection conn)
+        static SQLProcedure[] GenerateProcedureObjects(DataTable dt)
         {
             if (dt == null)
             {
@@ -170,35 +177,11 @@ namespace DataContext_Test
                 rows.AddRange(dt.Select(string.Format("TableName='{0}'", tableNames[i])));
             }
             tableNames.Clear();
-            TSQLProcedure[] procedures = new TSQLProcedure[procedureNames.Count()];
-                for (int i = 0; i < procedures.Length; i++)
-                {
-                    DataTable final = null;
-                    try
-                    {
-                        using (SqlDataAdapter da = new SqlDataAdapter())
-                        {
-                            SqlParameter param = new SqlParameter();
-                            param.DbType = DbType.String;
-                            param.Value = procedureNames[i];
-                            param.ParameterName = "@objname";
-
-                            da.SelectCommand = new SqlCommand(procSourceQuery, conn);
-                            da.SelectCommand.CommandType = System.Data.CommandType.StoredProcedure;
-                            da.SelectCommand.Parameters.Add(param);
-                            DataSet ds = new DataSet();
-                            da.Fill(ds, "source");
-
-                            final = ds.Tables["source"];
-                        }
-                    }
-                    catch
-                    {
-                        throw;
-                    }
-                    procedures[i] = new TSQLProcedure(procedureNames[i], (string)rows.Where(x => x.ItemArray[1].Equals(procedureNames[i])).First().ItemArray[0], 
-                        rows.Where(x => x.ItemArray[1].Equals(procedureNames[i])).ToArray(),final);
-                }
+            SQLProcedure[] procedures = new SQLProcedure[procedureNames.Count()];
+            for (int i = 0; i < procedures.Length; i++)
+            {
+                procedures[i] = new SQLProcedure(procedureNames[i], (string)rows.Where(x => x.ItemArray[1].Equals(procedureNames[i])).First().ItemArray[0], rows.Where(x => x.ItemArray[1].Equals(procedureNames[i])).ToArray());
+            }
             return procedures;
         }
     }
